@@ -1,5 +1,6 @@
 package com.example.climbachiya.permissiondemom;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -7,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.support.design.widget.CoordinatorLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -16,7 +18,9 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -24,9 +28,11 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
 
     MarshMallowPermission marshMallowPermission = null;
+    CoordinatorLayout coordinatorLayout = null;
 
     // Activity request codes
     private static final int CAMERA_CAPTURE_IMAGE_REQUEST_CODE = 100;
+    private static final int GALLERY_TAKE_IMAGE_REQUEST_CODE = 200;
     public static final int MEDIA_TYPE_IMAGE = 1;
 
     // directory name to store captured images and videos
@@ -35,15 +41,16 @@ public class MainActivity extends AppCompatActivity {
     private Uri fileUri; // file url to store image/video
 
     private ImageView imgPreview;
+    private Bitmap bitmap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Toast.makeText(MainActivity.this, "onCreate", Toast.LENGTH_SHORT).show();
-        marshMallowPermission = new MarshMallowPermission(this);
         imgPreview = (ImageView) findViewById(R.id.imgPreview);
+        coordinatorLayout = (CoordinatorLayout) findViewById(R.id.coordinatorLayout);
+        marshMallowPermission = new MarshMallowPermission(this, coordinatorLayout);
     }
 
     public void getPhotoFromCamera(View view) {
@@ -63,6 +70,29 @@ public class MainActivity extends AppCompatActivity {
             captureImage();
         }
 
+    }
+
+    public void getPhotoFromGallery(View view) {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!marshMallowPermission.checkPermissionForExternalStorage()) {
+                marshMallowPermission.requestPermissionForExternalStorage();
+            } else {
+                openGallery();
+            }
+        }else{
+            openGallery();
+        }
+
+    }
+
+    //Open gallery for choosing image
+    private void openGallery() {
+        // Create intent to Open Image applications like Gallery, Google Photos
+        Intent galleryIntent = new Intent(Intent.ACTION_PICK,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        // Start the Intent
+        startActivityForResult(galleryIntent, GALLERY_TAKE_IMAGE_REQUEST_CODE);
     }
 
     /**
@@ -105,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
      * */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
         // if the result is capturing Image
         if (requestCode == CAMERA_CAPTURE_IMAGE_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
@@ -123,6 +154,24 @@ public class MainActivity extends AppCompatActivity {
                         .show();
             }
         }
+        else if (requestCode == GALLERY_TAKE_IMAGE_REQUEST_CODE && resultCode == RESULT_OK)
+            try {
+
+                imgPreview.setVisibility(View.VISIBLE);
+                // We need to recyle unused bitmaps
+                if (bitmap != null) {
+                    bitmap.recycle();
+                }
+                InputStream stream = getContentResolver().openInputStream(
+                        data.getData());
+                bitmap = BitmapFactory.decodeStream(stream);
+                stream.close();
+                imgPreview.setImageBitmap(bitmap);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
     }
 
     /**
